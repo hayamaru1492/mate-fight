@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>メイツ組 ランダム倍ファイ（呼び方対応）</title>
+<style>
+body { font-family: sans-serif; background: #fafafa; padding: 12px; margin: 0; }
+h2 { margin-top: 0; font-size: 20px; text-align: center; }
+
+#controls { 
+  margin-bottom: 14px; 
+  display: flex; 
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+button, select { 
+  padding: 10px 12px; 
+  font-size: 15px; 
+  border: none; 
+  border-radius: 8px; 
+}
+button { background: #333; color: #fff; }
+select { background: #555; color: #fff; }
+
+#selected-area {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 520px) {
+  #selected-area {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.slot {
+  height: 58px;
+  border: 2px dashed #bbb;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: white;
+  font-size: 15px;
+  text-align: center;
+  padding: 4px;
+}
+.slot.correct { border-color: #4caf50; background: #d6f5d6; }
+.slot .remove-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #ff5c5c;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 14px;
+  cursor: pointer;
+  display: none;
+}
+.slot.filled .remove-btn { display: block; }
+
+#choice-area {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.choice {
+  padding: 10px 12px;
+  background: #e9f0ff;
+  border-radius: 8px;
+  border: 1px solid #bcd0ff;
+  text-align: center;
+  font-size: 15px;
+  cursor: pointer;
+  user-select: none;
+}
+
+#result { font-size: 22px; font-weight: bold; color: #ff4081; text-align: center; margin-top: 10px; }
+#hint-area, #correct-order { margin-top: 14px; font-size: 14px; line-height: 1.5; }
+
+.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<h2>メイツ組 ランダム倍ファイ</h2>
+
+<div id="controls">
+  <button id="reset-btn">再挑戦</button>
+  <select id="mode-select">
+    <option value="normal">通常モード</option>
+    <option value="call">倍倍ファイトコールモード</option>
+  </select>
+  <button id="play-music-btn" class="hidden">音楽再生</button>
+  <button id="hint-btn">ヒント</button>
+</div>
+
+<div id="selected-area"></div>
+<div id="choice-area"></div>
+<div id="result"></div>
+<div id="correct-order"></div>
+<div id="hint-area"></div>
+
+<audio id="bgm" preload="auto">
+  <source src="https://raw.githubusercontent.com/hayamaru1492/mate-fight/main/%E5%80%8D%E5%80%8DFIGHT!%20(Instrumental).mp3" type="audio/mpeg">
+</audio>
+
+<script>
+const members = [
+  { name: "新井 心菜", call: "ここにゃん", birthday: "2008-12-18" },
+  { name: "遠藤 まりん", call: "まりん", birthday: "2007-03-29" },
+  { name: "加藤 好実", call: "このみん", birthday: "2004-10-17" },
+  { name: "笹原 なな花", call: "ななか", birthday: "2009-07-07" },
+  { name: "嶋﨑 結花", call: "ゆいか", birthday: "2007-11-25" },
+  { name: "鈴木 花梨", call: "りんりん", birthday: "2006-09-10" },
+  { name: "高梨 ゆな", call: "ゆなちゃん", birthday: "2005-09-18" },
+  { name: "高山 かほ", call: "かほちゃん", birthday: "2009-12-18" },
+  { name: "辻 りりか", call: "りりか", birthday: "2007-05-17" },
+  { name: "中山 こはく", call: "こはく", birthday: "2008-07-30" },
+  { name: "萩田 そら", call: "そらちゃん", birthday: "2005-08-16" },
+  { name: "橋本 けいな", call: "けいな", birthday: "2008-01-09" },
+  { name: "森田 あみ", call: "あみちゃん", birthday: "2008-02-06" },
+  { name: "山下 ここ", call: "ここちゃん", birthday: "2006-02-18" },
+  { name: "山本 るしあ", call: "るしあ", birthday: "2007-10-13" },
+  { name: "横山 かのん", call: "かのん", birthday: "2005-10-03" }
+];
+
+let selected7 = [];
+let currentMode = "normal";
+
+const selectedArea = document.getElementById("selected-area");
+const choiceArea = document.getElementById("choice-area");
+const result = document.getElementById("result");
+const correctOrderDiv = document.getElementById("correct-order");
+const hintArea = document.getElementById("hint-area");
+const resetBtn = document.getElementById("reset-btn");
+const modeSelect = document.getElementById("mode-select");
+const playMusicBtn = document.getElementById("play-music-btn");
+const hintBtn = document.getElementById("hint-btn");
+const bgm = document.getElementById("bgm");
+
+function createSlots(){
+  selectedArea.innerHTML = "";
+  for(let i=0;i<7;i++){
+    const slot = document.createElement("div");
+    slot.className = "slot";
+    slot.dataset.index = i;
+
+    const rm = document.createElement("button");
+    rm.className = "remove-btn";
+    rm.textContent = "×";
+    rm.onclick = ()=> {
+      if(slot.dataset.name){ addChoice({ name: slot.dataset.name, call: slot.dataset.call, birthday: slot.dataset.birthday }); }
+      slot.innerHTML = "";
+      slot.appendChild(rm);
+      slot.classList.remove("filled","correct");
+      slot.dataset.name = "";
+      slot.dataset.call = "";
+      slot.dataset.birthday = "";
+      check();
+    };
+
+    slot.appendChild(rm);
+    selectedArea.appendChild(slot);
+  }
+}
+
+function addChoice(m){
+  const btn = document.createElement("div");
+  btn.className = "choice";
+  btn.textContent = m.name;
+  btn.dataset.call = m.call;
+  btn.dataset.birthday = m.birthday;
+  btn.onclick = ()=> placeSlot(m, btn);
+  choiceArea.appendChild(btn);
+}
+
+function placeSlot(m, btn){
+  const slots = document.querySelectorAll(".slot");
+  for(const s of slots){
+    if(!s.dataset.name){
+      s.dataset.name = m.name;
+      s.dataset.call = m.call;
+      s.dataset.birthday = m.birthday;
+      s.classList.add("filled");
+
+      s.innerHTML = (currentMode==="call") ? m.call : m.name;
+
+      const rm = document.createElement("button");
+      rm.className = "remove-btn";
+      rm.textContent = "×";
+      rm.onclick = ()=> {
+        addChoice({ name: s.dataset.name, call: s.dataset.call, birthday: s.dataset.birthday });
+        s.innerHTML = "";
+        s.appendChild(rm);
+        s.classList.remove("filled","correct");
+        s.dataset.name = "";
+        s.dataset.call = "";
+        s.dataset.birthday = "";
+        check();
+      };
+      s.appendChild(rm);
+
+      btn.remove();
+      check();
+      return;
+    }
+  }
+}
+
+function check(){
+  const slots = [...document.querySelectorAll(".slot")];
+  const filled = slots.filter(s=>s.dataset.birthday);
+
+  if(filled.length===7){
+    const list = filled.map(s=>({ name:s.dataset.name, call:s.dataset.call, birthday:s.dataset.birthday }));
+    const sorted = [...list].sort((a,b)=> new Date(a.birthday)-new Date(b.birthday));
+
+    slots.forEach((s,i)=>{
+      if(list[i].birthday === sorted[i].birthday) s.classList.add("correct");
+      else s.classList.remove("correct");
+    });
+
+    const allCorrect = list.every((v,i)=> v.birthday === sorted[i].birthday);
+
+    result.textContent = allCorrect ? ((currentMode==="call")?"🎉 正解！":"🎉 完成！") : "";
+  } else {
+    slots.forEach(s=>s.classList.remove("correct"));
+    result.textContent = "";
+  }
+}
+
+function pick7(arr){ return [...arr].sort(()=>Math.random()-0.5).slice(0,7); }
+
+bgm.addEventListener("ended", ()=>{
+  if(currentMode==="call"){
+    const sorted = [...selected7].sort((a,b)=> new Date(a.birthday)-new Date(b.birthday));
+    correctOrderDiv.innerHTML = "<strong>正解の順番:</strong><br>" +
+      sorted.map(m => m.call + " — " + m.birthday).join("<br>");
+  }
+});
+
+function reset(){
+  correctOrderDiv.innerHTML = "";
+  createSlots();
+  choiceArea.innerHTML = "";
+  selected7 = pick7(members);
+  selected7.forEach(m=>addChoice(m));
+  result.textContent = "";
+  hintArea.innerHTML = "";
+  bgm.pause(); bgm.currentTime = 0;
+}
+
+resetBtn.onclick = reset;
+
+modeSelect.onchange = ()=>{
+  currentMode = modeSelect.value;
+  playMusicBtn.classList.toggle("hidden", currentMode!=="call");
+  reset();
+};
+
+playMusicBtn.onclick = ()=>{ bgm.currentTime=0; bgm.play(); };
+
+hintBtn.onclick = ()=>{
+  const sortedAll = [...members].sort((a,b)=> new Date(a.birthday)-new Date(b.birthday));
+  hintArea.innerHTML = "<strong>全員の誕生日順:</strong><br>" + sortedAll.map(m=>`${m.name} — ${m.birthday}`).join("<br>");
+};
+
+createSlots();
+reset();
+</script>
+
+</body>
+</html>
